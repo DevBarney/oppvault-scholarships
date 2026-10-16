@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OppVault · Scholarships API</title>
+  <style>
+    :root { color-scheme: dark; --bg:#070b14; --card:#0f172a; --text:#e2e8f0; --muted:#94a3b8; --accent:#22d3ee; --border:rgba(255,255,255,.12); }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); }
+    header { padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border); display:flex; gap:1rem; flex-wrap:wrap; align-items:center; }
+    h1 { margin:0; font-size:1.15rem; }
+    .muted { color: var(--muted); font-size:.85rem; }
+    main { max-width: 960px; margin: 0 auto; padding: 1.25rem; }
+    .toolbar { display:flex; gap:.5rem; flex-wrap:wrap; margin-bottom:1rem; }
+    button, input, select { background:#111827; color:var(--text); border:1px solid var(--border); border-radius:8px; padding:.55rem .75rem; }
+    button { cursor:pointer; background: #0e7490; border-color:#0891b2; }
+    .card { background: var(--card); border:1px solid var(--border); border-radius:12px; padding:1rem; margin-bottom:.75rem; }
+    .card h2 { margin:0 0 .35rem; font-size:1rem; }
+    .meta { font-size:.8rem; color:var(--muted); margin-bottom:.5rem; }
+    a { color: var(--accent); }
+    .badge { display:inline-block; font-size:.7rem; padding:.15rem .45rem; border-radius:999px; background:#164e63; margin-right:.35rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>OppVault · Scholarships</h1>
+    <span class="muted">Aggregated listings · always verify on the official page</span>
+  </header>
+  <main>
+    <div class="toolbar">
+      <input id="q" placeholder="Search…" />
+      <select id="site">
+        <option value="">All sources</option>
+        <option value="opportunitydesk">Opportunity Desk</option>
+        <option value="opportunitiesforyouth">Opportunities for Youth</option>
+        <option value="scholarpositions">ScholarPositions</option>
+        <option value="scholarshipscorner">Scholarships Corner</option>
+      </select>
+      <label class="muted"><input type="checkbox" id="upcoming" checked /> Upcoming only</label>
+      <button id="load">Refresh</button>
+      <button id="sync">Sync sources</button>
+    </div>
+    <p id="status" class="muted">Loading…</p>
+    <div id="list"></div>
+  </main>
+  <script>
+    async function load() {
+      const q = document.getElementById('q').value.trim();
+      const site = document.getElementById('site').value;
+      const upcoming = document.getElementById('upcoming').checked;
+      const params = new URLSearchParams({ limit: '40', upcoming: upcoming ? 'true' : 'false' });
+      if (q) params.set('q', q);
+      if (site) params.set('site', site);
+      document.getElementById('status').textContent = 'Loading…';
+      const r = await fetch('/opportunities?' + params);
+      const data = await r.json();
+      document.getElementById('status').textContent = data.total + ' matches · showing ' + data.count;
+      const list = document.getElementById('list');
+      list.innerHTML = '';
+      for (const item of data.items) {
+        const el = document.createElement('article');
+        el.className = 'card';
+        const conf = item.apply_confidence === 'high' ? 'Official link' : (item.apply_url ? 'Possible apply link' : 'Source only');
+        el.innerHTML = `
+          <h2>${escapeHtml(item.title || '')}</h2>
+          <div class="meta">
+            <span class="badge">${escapeHtml(item.site || '')}</span>
+            ${item.deadline ? '<span class="badge">Deadline ' + escapeHtml(item.deadline) + '</span>' : ''}
+            <span class="badge">${conf}</span>
+          </div>
+          <p class="muted">${escapeHtml((item.excerpt || '').slice(0, 220))}</p>
+          <p>
+            <a href="${escapeAttr(item.primary_url)}" target="_blank" rel="noopener">Open primary link</a>
+            · <a href="${escapeAttr(item.source_link)}" target="_blank" rel="noopener">Source listing</a>
+          </p>`;
+        list.appendChild(el);
+      }
+    }
+    function escapeHtml(s) {
+      return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+    function escapeAttr(s) { return escapeHtml(s || '#'); }
+    document.getElementById('load').onclick = load;
+    document.getElementById('sync').onclick = async () => {
+      document.getElementById('status').textContent = 'Syncing (may take ~30s)…';
+      await fetch('/sync?max_pages=1', { method: 'POST' });
+      await load();
+    };
+    load();
+  </script>
+</body>
+</html>
